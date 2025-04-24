@@ -18,6 +18,7 @@ parser.add_argument("--target", required=True, help="Cible à scanner (ex: examp
 parser.add_argument("--threads", type=int, default=10, help="Nombre de threads (futur usage)")
 parser.add_argument("--vulns", default="xss,sqli,idor,csrf", help="Types de failles à rechercher")
 parser.add_argument("--verbose", action="store_true", help="Afficher la sortie complète des commandes système")
+parser.add_argument("--openai", help="Utiliser OpenAI pour améliorer la recon")
 args = parser.parse_args()
 
 TARGET_DOMAIN = args.target
@@ -193,10 +194,11 @@ Tu es un expert en sécurité web. Voici un endpoint à analyser : {url}
 def main():
     ensure_dir("js")
     reconnaissance(TARGET_DOMAIN)
-    classify_endpoints_with_openai()
-    analyze_js_files()
-    print("[+] Rapport généré : rapport/analyse_js.md")
-    print("[+] Lancement de l'interface web sur http://localhost:5000")
+    if args.openai:
+        classify_endpoints_with_openai()
+        analyze_js_files()
+        print("[+] Rapport généré : rapport/analyse_js.md")
+        print("[+] Lancement de l'interface web sur http://localhost:5000")
     app.run(debug=False)
 
 if __name__ == "__main__":
