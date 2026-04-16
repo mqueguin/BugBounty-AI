@@ -4,9 +4,13 @@ Workspace bug bounty utilisable de **trois façons** :
 
 1. **Claude Code** (poste/laptop) — slash commands, subagents spécialisés
 2. **Mode autopilot** — Claude orchestre seul recon + tri + probes + findings (Python standalone)
-3. **Depuis ton téléphone** — web UI mobile-first, bot Telegram, ou Termux direct
+3. **Depuis ton téléphone (iPhone/Android)** — web UI mobile-first et/ou bot Telegram, déployé en 1-click sur Railway/Render/Fly.io
 
 L'objectif : passer moins de temps à scroller des endpoints, et plus à trouver des failles exploitables.
+
+> 📱 **Tu veux bosser depuis un iPhone sans terminal ?** Suis [IPHONE.md](IPHONE.md) — déploiement Railway en 10 min, ensuite tu utilises Safari + Telegram et c'est tout.
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/byAz1nee/BugBounty-AI)
 
 ---
 

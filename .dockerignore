@@ -1,0 +1,32 @@
+# Artefacts runtime — pas besoin dans l'image
+findings/
+recon/
+rapport/
+state/
+js/
+scope.txt
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+.web_token
+
+# Python build
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Git
+.git/
+.github/
+
+# Claude Code - skip dans l'image
+.claude/settings.local.json
+
+# Docs
+*.md
+!CLAUDE.md
+!README.md

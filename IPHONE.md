@@ -1,95 +1,161 @@
-# BugBounty-AI sur iPhone — guide pas à pas
+# BugBounty-AI sur iPhone — setup sans terminal
 
-Tu n'as que ton iPhone. OK. On utilise **GitHub Codespaces** : un Linux qui tourne sur les serveurs de GitHub, pilotable depuis Safari, gratuit 60h/mois. Tout se fait dans le navigateur.
+**Tu n'as que ton iPhone.** Tu ne veux pas taper dans un terminal. Tu acceptes de payer ~5€/mois.
 
-Temps total : **~5 minutes**.
+On déploie l'app sur **Railway** (plateforme cloud). Tu fais **tout dans Safari**, en tapant dans des formulaires. Ensuite tu bosses depuis :
 
----
+- **Safari** (web UI mobile-first) — pour lancer des scans et lire les findings
+- **Telegram** (optionnel) — notifications push et contrôle par commandes
 
-## Étape 0 — Pré-requis
-
-Tu as besoin de :
-
-1. **Un compte GitHub** (gratuit) — [github.com/signup](https://github.com/signup)
-2. **Une clé API Anthropic** — [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) → *Create Key* → copie (commence par `sk-ant-`)
-3. **Un domaine que tu as le droit de tester** (programme HackerOne/Bugcrowd/Intigriti officiel)
+**Temps : 10 min. Coût : ~5€/mois** (crédits Railway ; la première fois tu as 5$ offerts).
 
 ---
 
-## Étape 1 — Fork du dépôt
+## Étape 1 — Récupère ta clé API Anthropic
 
-1. Ouvre **Safari**, va sur : `https://github.com/byAz1nee/BugBounty-AI`
-2. Tape **Fork** (icône en haut à droite), puis **Create fork**
-3. Tu es maintenant sur `https://github.com/<ton-pseudo>/BugBounty-AI`
+Dans Safari, va sur [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) :
 
----
+1. Sign in (compte Anthropic requis, gratuit)
+2. **Create Key** → nomme-la `bugbounty` → **Create**
+3. **Copie la clé** (elle commence par `sk-ant-`). Tu ne pourras plus la voir après.
 
-## Étape 2 — Lance un Codespace
-
-1. Sur ton fork, tape le bouton vert **`<> Code`**
-2. Onglet **Codespaces** → **Create codespace on main** (ou sur la branche `claude/bug-bounty-bot-1QdiX` si c'est celle que tu veux tester)
-3. Safari ouvre un **VS Code web**. Attends ~2 min : l'installation auto des outils (subfinder, httpx, etc.) tourne en fond.
-4. Quand tu vois `BugBounty-AI prêt` dans le terminal → c'est bon.
-
-> Si le terminal n'est pas visible : menu **☰** en haut à gauche → **Terminal** → **New Terminal**.
+Mets-la de côté dans l'app Notes de ton iPhone.
 
 ---
 
-## Étape 3 — Pose ta clé API
+## Étape 2 — Fork le dépôt sur GitHub
 
-Dans le terminal du Codespace (en bas de l'écran), tape :
+1. Va sur [github.com/byAz1nee/BugBounty-AI](https://github.com/byAz1nee/BugBounty-AI)
+2. Sign in (compte GitHub requis, gratuit)
+3. Tape **Fork** (coin haut droit) → **Create fork**
+4. Tu as maintenant ton propre fork, par exemple `github.com/<ton-pseudo>/BugBounty-AI`
 
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...ta-clé...
+---
+
+## Étape 3 — Déploie sur Railway
+
+1. Va sur [railway.com](https://railway.com) dans Safari
+2. **Login with GitHub** (autorise Railway à lire ton fork)
+3. Sur le dashboard : **+ New Project** → **Deploy from GitHub repo**
+4. Sélectionne ton fork **BugBounty-AI**
+5. Railway détecte automatiquement le `Dockerfile` et commence le build
+
+Pendant le build (~5 min) :
+
+6. Tape sur le service *BugBounty-AI* dans le projet → onglet **Variables** → **+ New Variable**
+7. Ajoute ces 3 variables une par une :
+
+   | Name | Value |
+   |------|-------|
+   | `ANTHROPIC_API_KEY` | colle ta clé `sk-ant-...` |
+   | `BUGBOUNTY_WEB_TOKEN` | génère 24 chars aléatoires (ex : `J8f3kL9mN2pQ7rT4uY6wX1zA`) |
+   | `ANTHROPIC_MODEL` | `claude-opus-4-7` |
+
+8. Onglet **Settings** → section **Networking** → **Generate Domain** → Railway te donne une URL du type `bugbounty-ai-production.up.railway.app`
+9. Onglet **Settings** → section **Volumes** → **+ New Volume** :
+   - Mount Path : `/app/findings`
+   - Size : 1 GB
+   *(pour que tes findings survivent aux redémarrages)*
+
+Une fois le build fini (tu vois **Active** en vert), l'URL est opérationnelle.
+
+---
+
+## Étape 4 — Ouvre l'app dans Safari
+
+Ouvre dans Safari :
+
+```
+https://<ton-domaine-railway>/?token=<TON-BUGBOUNTY-WEB-TOKEN>
 ```
 
-**Astuce iPhone** : pour coller, appuie longuement dans le terminal → *Coller*.
-
-Pour éviter de la retaper à chaque session, rends-la permanente :
-
-1. Dans Safari, va sur ton fork GitHub → **Settings** (de ton profil, pas du repo) → **Codespaces** → **Repository secrets**
-2. **New secret** : nom `ANTHROPIC_API_KEY`, valeur `sk-ant-...`
-3. Elle sera injectée automatiquement au prochain codespace.
-
----
-
-## Étape 4 — Démarre la web UI
-
-Toujours dans le terminal :
-
-```bash
-bash quickstart.sh
+Exemple :
+```
+https://bugbounty-ai-production.up.railway.app/?token=J8f3kL9mN2pQ7rT4uY6wX1zA
 ```
 
-Le script :
-- Génère un token d'auth
-- Lance `webapp.py` sur le port 8080
-- T'affiche un lien du type :
-  ```
-  https://<ton-codespace>-8080.app.github.dev/?token=abc123...
-  ```
+Tu vois le **dashboard noir mobile-first**.
+
+> 💡 **Ajoute à l'écran d'accueil** : menu partage Safari → *Sur l'écran d'accueil*. Tu auras une icône comme une app native.
 
 ---
 
-## Étape 5 — Ouvre l'UI dans Safari
+## Étape 5 — Lance ta première chasse
 
-**Tape longuement sur l'URL** affichée dans le terminal → **Ouvrir un lien** → ça ouvre un nouvel onglet Safari. Tu vois un dashboard sombre mobile-first.
+Dans le dashboard :
 
-Si Safari te demande une authentification GitHub, c'est normal : les ports Codespaces sont privés par défaut, tu es déjà loggé donc ça passe.
-
----
-
-## Étape 6 — Lance ta première chasse
-
-Dans la web UI :
-
-1. **Ajoute un domaine au scope** (en haut) : saisis `example.com` et tape *Ajouter au scope*.
-2. **Démarre un scan** :
-   - Cible : `example.com`
+1. **Scope vide** → dans le champ, tape ton domaine autorisé (programme HackerOne/Bugcrowd officiel) → **Ajouter au scope**
+2. **Lancer un scan** :
+   - Cible : ton domaine
    - Mode : **Autopilot (Claude orchestre tout)**
-   - Tape **Démarrer**
-3. Tu es redirigé vers la page **Status** — rafraîchissement auto toutes les 5s.
-4. Les findings apparaissent dans l'onglet **Findings** au fur et à mesure.
+   - **Démarrer**
+3. La page **Status** s'affiche (refresh auto toutes les 5s)
+4. Les findings apparaissent dans l'onglet **Findings** au fur et à mesure
+
+**Tu peux fermer Safari.** Le scan continue côté Railway. Reviens quand tu veux.
+
+---
+
+## Bonus — Notifications Telegram sur ton iPhone
+
+Pour recevoir une notification push quand un scan se termine (et contrôler par commandes) :
+
+### Crée un bot Telegram
+
+Dans l'app Telegram sur ton iPhone :
+
+1. Cherche **@BotFather** → lance-le → `/newbot`
+2. Donne un nom, puis un username (finit par `bot`)
+3. BotFather te donne un **token** (format `123456:ABC-DEF...`). Copie-le.
+
+### Trouve ton chat_id
+
+1. Cherche ton nouveau bot dans Telegram → `/start`
+2. Dans Safari, ouvre : `https://api.telegram.org/bot<TON-TOKEN>/getUpdates`
+3. Cherche `"chat":{"id":123456789` → **c'est ton chat_id**
+
+### Ajoute les variables sur Railway
+
+Retourne sur Railway → ton service → **Variables** → ajoute :
+
+| Name | Value |
+|------|-------|
+| `TELEGRAM_BOT_TOKEN` | le token BotFather |
+| `TELEGRAM_ALLOWED_CHATS` | ton chat_id (juste le nombre) |
+
+**Attention** : Railway va redémarrer ton service automatiquement.
+
+### Démarre le bot
+
+Actuellement, le service Railway ne lance que le webapp. Pour ajouter le bot Telegram :
+
+1. Sur Railway, dans ton projet → **+ Create** → **Empty Service** → renomme-le `bot`
+2. **Settings** → **Source** → **Connect Repo** → ton fork BugBounty-AI
+3. **Settings** → **Deploy** → **Custom Start Command** :
+   ```
+   python3 bot.py
+   ```
+4. **Variables** → **Add reference** → copie les 3 mêmes variables du premier service
+5. Deploy → tu peux maintenant envoyer `/scan example.com` depuis Telegram
+
+---
+
+## Utilisation quotidienne
+
+### Depuis Safari
+1. Ouvre ton raccourci iPhone
+2. Tape **Démarrer** avec ta cible
+3. Fais autre chose
+4. Reviens plus tard voir les findings
+
+### Depuis Telegram
+```
+/scan example.com          → autopilot
+/status                     → où on en est
+/findings                   → liste
+/finding xss-exemple-slug   → contenu complet du finding
+/cancel                     → stop le scan
+```
 
 ---
 
@@ -97,81 +163,58 @@ Dans la web UI :
 
 **Claude (moi, `claude-opus-4-7` via l'API Anthropic).**
 
-Concrètement, dans le code (`autopilot.py`) :
+Dans `autopilot.py`, il y a une boucle :
 
 ```
-boucle:
-    réponse = claude.messages.create(tools=[...], messages=[...])
-    pour chaque tool_use dans réponse:
-        execute(tool_use)        # run_command, probe_xss, write_finding...
+tant que pas fini :
+    réponse = claude.envoie(tools=[run_command, probe_xss, write_finding, ...])
+    pour chaque action_demandée par Claude :
+        exécute-la (avec garde-fous)
         renvoie le résultat à Claude
-    si Claude appelle finish() : stop
+    si Claude dit "finish" : stop
 ```
 
-Claude décide :
-- Quelle commande recon lancer et avec quels flags
+Claude choisit :
+- Quels outils lancer (`subfinder`, `httpx`, `gau`, etc.) et avec quels flags
 - Quels endpoints sont prometteurs
-- Quels paramètres GET probe pour XSS
-- Quand écrire un finding (et quoi dedans)
+- Quels paramètres GET tester en XSS
+- Quand écrire un finding (et quoi mettre dedans)
 - Quand s'arrêter
 
-Le Python ne fait que :
-- **Exécuter** ce que Claude demande
-- **Refuser** ce qui est dangereux (rm -rf, DROP TABLE, curl POST, sudo, etc.)
-- **Limiter** (10 probes XSS max, 40 itérations max)
-- **Persister** l'état pour que tu puisses suivre depuis Safari
+Le Python ne fait que **exécuter** et **refuser ce qui est dangereux** (rm -rf, DROP TABLE, curl POST, sudo…).
 
 ---
 
-## Après le scan
+## Coût
 
-- **Consulter un finding** : onglet *Findings* → tape sur un nom → le contenu Markdown s'affiche, bouton *Télécharger .md*.
-- **Les findings `_candidates`** sont des hypothèses à valider manuellement (Claude n'a pas pu confirmer tout seul).
-- **Copier un finding** : tape longuement sur le `pre` → *Tout sélectionner* → *Copier*.
+Railway facture à l'usage. Pour un scanner qui tourne épisodiquement :
 
----
+- **Hobby plan** : 5$/mois inclus (crédit)
+- Web service + volume 1 GB : **~3-5$/mois** en usage typique
+- Tu es alerté bien avant de dépasser ton crédit
 
-## Pour le revenir demain
+Les **tokens Claude** sont facturés séparément sur ton compte Anthropic. Comptes :
 
-1. Va sur [github.com/codespaces](https://github.com/codespaces) dans Safari
-2. Tape sur ton codespace (il est suspendu, pas supprimé)
-3. Re-tape : `bash quickstart.sh` → l'URL repasse en vert.
-
-> ⚠  Les Codespaces suspendus s'auto-suppriment après 30 jours d'inactivité. Tes findings persistent dans le codespace ; pour les sauvegarder : `git add findings && git commit -m "findings" && git push`.
+- **Autopilot par domaine** : ~0.50€ à 2€ selon la taille de la recon (avec `claude-opus-4-7`)
+- Si tu veux réduire → mets `ANTHROPIC_MODEL=claude-sonnet-4-6` dans Railway (~3x moins cher)
 
 ---
 
-## Alternative 100% iPhone : Telegram bot
+## Problèmes fréquents
 
-Si tu préfères piloter depuis l'app **Telegram** (notifications push, pas besoin de garder Safari ouvert) :
-
-1. Dans Telegram, parle à [@BotFather](https://t.me/BotFather) → `/newbot` → récupère le token
-2. Récupère ton `chat_id` : envoie `/start` à ton nouveau bot, puis ouvre `https://api.telegram.org/bot<TOKEN>/getUpdates` dans Safari
-3. Dans le terminal Codespace :
-   ```bash
-   export TELEGRAM_BOT_TOKEN=...
-   export TELEGRAM_ALLOWED_CHATS=<ton-chat-id>
-   nohup python3 bot.py > state/bot.log 2>&1 &
-   ```
-4. Dans Telegram : `/scan example.com`, `/status`, `/findings`, `/finding <slug>`.
+| Symptôme | Solution |
+|----------|----------|
+| Page Railway 502 | Build pas fini, attends 2 min |
+| `Token invalide` dans Safari | Vérifie que `?token=...` match ton `BUGBOUNTY_WEB_TOKEN` |
+| Scan reste en *running* pendant des heures | Railway l'a peut-être killé (mémoire). `Restart` le service, relance. |
+| Findings perdus après redémarrage | Tu as oublié le volume sur `/app/findings` (étape 3, point 9) |
+| Claude refuse de tester | Ta cible n'est pas dans `scope.txt`. Ajoute-la depuis le dashboard. |
 
 ---
 
-## Limites connues depuis iPhone
+## Alternatives si Railway ne te convient pas
 
-- **Clavier** : le terminal VS Code est utilisable mais pas optimal sur iPhone. Les raccourcis iOS aident (`Cmd+V` si clavier Bluetooth).
-- **60h gratuites/mois** sur Codespaces (largement suffisant pour du bug bounty).
-- **Le codespace s'arrête** après 30 min d'inactivité par défaut. `bash quickstart.sh` le réveille.
-- **HTTPS obligatoire** : les URLs `*.app.github.dev` sont en HTTPS, tout est chiffré.
-
----
-
-## Si quelque chose casse
-
-| Symptôme | Fix |
-|----------|-----|
-| `ANTHROPIC_API_KEY is not set` | Re-lance `export ANTHROPIC_API_KEY=...` ou configure le secret Codespaces |
-| Port 8080 déjà utilisé | `pkill -f webapp.py` puis `bash quickstart.sh` |
-| URL `app.github.dev` en 502 | Attends 10s (le Codespace se réveille) et recharge |
-| `subfinder: command not found` | `bash .devcontainer/postCreate.sh` pour réinstaller |
-| Findings vides alors que Claude a tourné | `cat state/autopilot.log` pour voir où ça a coincé |
+- **Render.com** : même principe, utilise `render.yaml` fourni dans le repo. Gratuit si tu acceptes que le service dorme après 15 min d'inactivité.
+- **Fly.io** : `fly launch --dockerfile` depuis un terminal. Gratuit généreux.
+- **GitHub Codespaces** : voir `IPHONE.md` dans les anciennes versions (terminal nécessaire — pas top sur iPhone).
+- **Raspberry Pi chez toi** + `docker run` : une fois par un pote, puis iPhone seul pour toujours.

@@ -411,9 +411,12 @@ def cfg_missing(e):
 
 
 def main():
+    # Défaut intelligent : $PORT si défini (Railway/Render/Fly/Heroku), sinon 5000
+    default_port = int(os.getenv("PORT", "5000"))
+    default_host = os.getenv("HOST", "127.0.0.1")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--host", default=default_host)
+    parser.add_argument("--port", type=int, default=default_port)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
@@ -421,9 +424,10 @@ def main():
     if TOKEN is None:
         TOKEN = secrets.token_urlsafe(24)
         print(f"[!] BUGBOUNTY_WEB_TOKEN non défini. Token généré : {TOKEN}")
-        print(f"[!] Ouvre : http://{args.host}:{args.port}/?token={TOKEN}")
+        print(f"[!] ⚠  Configure cette variable d'environnement pour la persister entre redémarrages.")
+        print(f"[!] URL locale : http://{args.host}:{args.port}/?token={TOKEN}")
     else:
-        print(f"[+] Auth OK. http://{args.host}:{args.port}/?token=<TOKEN>")
+        print(f"[+] Auth OK. URL : http://{args.host}:{args.port}/?token=<TOKEN>")
 
     app.run(host=args.host, port=args.port, debug=args.debug)
 

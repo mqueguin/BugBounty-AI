@@ -1,0 +1,21 @@
+# Render.com blueprint — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: bugbounty-ai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BUGBOUNTY_WEB_TOKEN
+        generateValue: true
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-4-7
+      - key: PORT
+        value: 8080
+    disk:
+      name: bugbounty-data
+      mountPath: /app/findings
+      sizeGB: 1
