@@ -1,0 +1,34 @@
+{
+  "name": "BugBounty-AI",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.22"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "BugBounty-AI Web UI",
+      "onAutoForward": "openBrowser",
+      "visibility": "private"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ]
+    },
+    "codespaces": {
+      "openFiles": [
+        "IPHONE.md"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "GOPATH": "/home/vscode/go",
+    "PATH": "${containerEnv:PATH}:/home/vscode/go/bin"
+  }
+}
