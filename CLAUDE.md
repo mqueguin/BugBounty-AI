@@ -1,57 +1,96 @@
 # BugBounty-AI — Guide Claude Code
 
-Ce workspace est un copilote bug bounty piloté par Claude Code. Ton rôle : accélérer la reconnaissance, l'analyse de vulnérabilités, la rédaction de PoC et la soumission de rapports.
+Workspace bug bounty piloté par Claude Code. Trois surfaces d'utilisation :
 
-## Règles d'or
+1. **Slash commands Claude Code** (poste/laptop)
+2. **Mode autopilot** (Python autonome via `IABounty.py --autopilot` ou `autopilot.py`)
+3. **Web UI mobile** (`webapp.py`) ou **bot Telegram** (`bot.py`) pour piloter depuis un téléphone
 
-1. **Scope avant tout.** Ne teste qu'un domaine explicitement listé dans `scope.txt` ou confirmé par l'utilisateur. Si absent, demande.
-2. **Pas de tests intrusifs non autorisés.** Pas de DoS, brute-force massif, exfiltration réelle de données, ni contournement d'authentification hors scope.
-3. **Trace tout.** Chaque commande recon/test produit un artefact sous `recon/`, `rapport/`, ou `findings/`.
-4. **Respect du rate-limit.** Utilise des délais raisonnables (`-rate-limit`, `-delay`) sur les outils actifs.
-5. **Source unique de vérité.** Les findings vont dans `findings/<id>.md` avec un template standard (voir `.claude/commands/report.md`).
+## Règles d'or (non-négociables)
 
-## Arborescence attendue
+1. **Scope avant tout.** Ne teste qu'un domaine listé dans `scope.txt` ou confirmé par l'utilisateur. Si absent, refuse et propose `/scope-add`.
+2. **Pas de tests intrusifs non autorisés.** Pas de DoS, brute-force massif, exfiltration réelle, contournement d'auth hors scope.
+3. **Trace tout.** Chaque commande recon/test produit un artefact sous `recon/`, `rapport/`, `findings/`, ou `state/`.
+4. **Respect du rate-limit.** Délais raisonnables (`-rate-limit`, `-delay`) sur les outils actifs. Quota probes XSS = 10/run en autopilot.
+5. **Source unique de vérité.** Les findings vont dans `findings/<slug>.md` (confirmés) ou `findings/_candidates/<slug>.md`.
+
+## Arborescence
 
 ```
 BugBounty-AI/
-├── IABounty.py              # Pipeline Python (recon + analyse Claude)
-├── scope.txt                # Domaines autorisés (à créer par l'utilisateur)
-├── recon/                   # Outputs bruts des outils recon
-├── rapport/                 # Rapports générés (JSON, Markdown)
-├── findings/                # Un fichier Markdown par vulnérabilité confirmée
-├── js/                      # Fichiers JS téléchargés pour analyse
+├── IABounty.py              # Pipeline classique + entry --autopilot
+├── autopilot.py             # Boucle agentique Claude (tool use orchestrator)
+├── webapp.py                # UI web mobile-first (Flask + auth token)
+├── bot.py                   # Bot Telegram (whitelist obligatoire)
+├── install_termux.sh        # Bootstrap Android (Termux)
+├── scope.txt                # Domaines autorisés (à créer ; .gitignored)
+├── recon/                   # Outputs outils recon
+├── rapport/                 # Rapports JSON/Markdown générés
+├── findings/                # Findings confirmés
+│   └── _candidates/         # À valider manuellement
+├── state/                   # current.json + autopilot.log + stdout.log
+├── js/                      # Bundles JS téléchargés
 └── .claude/
-    ├── agents/              # Subagents (recon, vuln-hunter, report-writer)
-    ├── commands/            # Slash commands (/recon, /hunt, /poc, /report)
-    └── skills/              # Références vuln (XSS, SQLi, IDOR, SSRF, JWT)
+    ├── settings.json        # Permissions, env
+    ├── agents/              # recon-specialist, vuln-hunter, report-writer, js-analyzer
+    ├── commands/            # /recon /hunt /analyze /poc /report /triage /autopilot /serve /scope-add
+    └── skills/              # Méthodologies XSS, SQLi, IDOR, SSRF, JWT
 ```
 
-## Workflow type
+## Workflow type — depuis Claude Code
 
-1. `/recon <domain>` → lance la phase passive + active, produit `recon/*.txt`.
-2. Délègue à l'agent **recon-specialist** pour trier les endpoints intéressants.
-3. `/hunt xss|sqli|idor|ssrf|jwt <url>` → délègue au **vuln-hunter** qui applique la skill pertinente.
-4. `/poc <url> <vuln>` → PoC minimal reproductible.
-5. `/report <finding-id>` → rapport HackerOne/Bugcrowd via **report-writer**.
-6. `/triage` → classement impact/sévérité des findings en attente.
+1. `/scope-add <domain>` → ajoute la cible
+2. `/autopilot <domain>` → Claude orchestre tout (recon + tri + probes XSS + findings)
+3. **OU** workflow manuel :
+   - `/recon <domain>` → délégué à recon-specialist
+   - `/hunt xss|sqli|idor|ssrf|jwt <url>` → délégué à vuln-hunter
+   - `/poc <slug>` → PoC minimal
+   - `/report <slug>` → rapport H1/Bugcrowd
+4. `/triage` → classement impact/sévérité
+5. `/serve [port]` → web UI accessible depuis ton téléphone
+
+## Workflow depuis un téléphone
+
+| Surface | Commande | Notes |
+|---------|----------|-------|
+| Web UI | `python3 webapp.py --host 0.0.0.0 --port 8080` | Auth via `BUGBOUNTY_WEB_TOKEN` ; expose via cloudflared/ngrok pour accès distant |
+| Telegram | `python3 bot.py` | Whitelist `TELEGRAM_ALLOWED_CHATS` obligatoire |
+| Termux | `bash install_termux.sh` puis `python3 autopilot.py --target <domain>` | Tout tourne sur Android |
 
 ## Outils CLI attendus dans le PATH
 
-`subfinder`, `httpx` (ou `httpx-toolkit`), `gau`, `waybackurls`, `paramspider`, `katana`, `nuclei`, `ffuf`, `sqlmap`, `dalfox`, `gf`, `jq`, `curl`.
+`subfinder`, `httpx`, `gau`, `waybackurls`, `paramspider`, `katana`, `nuclei`, `ffuf`, `sqlmap`, `dalfox`, `gf`, `jq`, `curl`, `dig`.
 
-Si un outil manque, **propose l'installation** (`go install …`, `apt install …`) avant de bricoler un fallback.
+Si un outil manque, **propose l'installation** (`go install …`, `pkg install …` sur Termux, `apt install …` ailleurs) avant de bricoler un fallback.
 
 ## Modèle Claude
 
-Le pipeline Python utilise `claude-sonnet-4-6` par défaut (override via `--model`). Active le prompt caching sur les listes d'endpoints volumineuses (voir `IABounty.py`).
+`claude-opus-4-7` par défaut (override via `--model` ou env `ANTHROPIC_MODEL`). Prompt caching activé sur les listes d'endpoints volumineuses (voir `IABounty.py:extract_endpoints`).
 
 ## Variables d'environnement
 
-- `ANTHROPIC_API_KEY` — obligatoire pour `IABounty.py`
-- `ANTHROPIC_MODEL` — optionnel, défaut `claude-sonnet-4-6`
+| Var | Rôle | Où |
+|-----|------|----|
+| `ANTHROPIC_API_KEY` | Obligatoire pour Claude | partout |
+| `ANTHROPIC_MODEL` | Override modèle | défaut `claude-opus-4-7` |
+| `BUGBOUNTY_WEB_TOKEN` | Token auth de la web UI | `webapp.py` (auto-généré si absent) |
+| `TELEGRAM_BOT_TOKEN` | Token bot Telegram | `bot.py` |
+| `TELEGRAM_ALLOWED_CHATS` | Whitelist `chat_id` (CSV) | `bot.py` (refus si absent) |
+
+## Sécurité du mode autopilot
+
+`autopilot.py` impose :
+- Whitelist binaires (subfinder, httpx, gau, paramspider, katana, curl GET, jq, sort, dig, ...)
+- `curl` limité à GET/HEAD, refus de `-d`/`--data`/`-T`
+- Patterns destructifs refusés (rm -rf /, DROP TABLE, fork bomb, sudo, pipe-to-shell, mkfs, dd, …)
+- Quota 10 probes XSS max
+- Loop max 40 itérations
+- Sandbox `cwd` = workspace, refus des chemins remontant hors workspace
 
 ## Ce que tu ne dois PAS faire
 
-- Ne push **jamais** de credentials, cookies, headers d'auth, ou PoC exploitant de vraies données utilisateur dans git.
-- Ne commit jamais le dossier `findings/` s'il contient des détails non publics d'un programme privé. Le `.gitignore` l'exclut par défaut.
-- Ne lance pas `nuclei` / `ffuf` / `sqlmap` sans confirmation explicite de l'utilisateur sur la cible.
+- Ne push **jamais** credentials, cookies, headers d'auth, ou PoC sur de vraies données utilisateur.
+- Ne commit jamais `findings/` ni `recon/` ni `state/` (déjà dans `.gitignore`).
+- Ne lance pas `nuclei` / `ffuf` / `sqlmap` sans confirmation explicite sur la cible.
+- Ne lance pas le bot Telegram sans `TELEGRAM_ALLOWED_CHATS` (sinon n'importe qui peut le piloter).
+- Ne lance pas la web UI sur `0.0.0.0` sans `BUGBOUNTY_WEB_TOKEN` (sinon UI exposée en clair).

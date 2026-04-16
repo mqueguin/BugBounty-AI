@@ -1,3 +1,6 @@
 anthropic>=0.92.0
 flask>=3.0.0
 requests>=2.31.0
+
+# Optionnel — bot Telegram (installer avec : pip install 'python-telegram-bot[job-queue]>=21.0')
+# python-telegram-bot[job-queue]>=21.0

@@ -1,76 +1,137 @@
-# BugBounty-AI — Copilote Bug Bounty piloté par Claude Code
+# BugBounty-AI — Copilote Bug Bounty piloté par Claude
 
-Workspace dédié au bug bounty, utilisable :
+Workspace bug bounty utilisable de **trois façons** :
 
-- **depuis Claude Code** (CLI Anthropic) grâce au dossier `.claude/` (subagents, slash commands, skills)
-- **en ligne de commande** via `IABounty.py`, un pipeline recon + analyse Claude (Anthropic SDK)
+1. **Claude Code** (poste/laptop) — slash commands, subagents spécialisés
+2. **Mode autopilot** — Claude orchestre seul recon + tri + probes + findings (Python standalone)
+3. **Depuis ton téléphone** — web UI mobile-first, bot Telegram, ou Termux direct
 
-Objectif : réduire le temps passé à scroller des endpoints, maximiser le temps passé à trouver des failles exploitables.
+L'objectif : passer moins de temps à scroller des endpoints, et plus à trouver des failles exploitables.
 
 ---
 
-## Deux façons de l'utiliser
+## Trois surfaces d'utilisation
 
-### 1. Claude Code (recommandé)
-
-Ouvre le dossier dans [Claude Code](https://claude.com/claude-code) — tout le workflow est à portée de slash command.
+### A. Claude Code (recommandé sur poste)
 
 ```
 cd BugBounty-AI
 claude
 ```
 
-Puis dans la session :
+Slash commands disponibles :
 
-```
-/scope-add example.com
-/recon example.com
-/hunt xss https://example.com/search?q=test
-/poc <finding-slug>
-/report <finding-slug>
-/triage
-```
+| Commande | Effet |
+|----------|-------|
+| `/scope-add <domain>` | Ajoute un domaine à `scope.txt` |
+| `/recon <domain>` | Délègue à `recon-specialist` |
+| `/hunt xss\|sqli\|idor\|ssrf\|jwt <url>` | Délègue à `vuln-hunter` |
+| `/analyze <url\|file>` | Analyse vecteurs d'attaque |
+| `/poc <slug>` | Génère un PoC minimal |
+| `/report <slug>` | Rapport H1/Bugcrowd via `report-writer` |
+| `/triage` | Classement impact/sévérité |
+| `/autopilot <domain>` | **Chasse autonome complète** |
+| `/serve [port]` | Lance la web UI mobile |
 
-Claude Code charge automatiquement :
-- `CLAUDE.md` — règles du workspace, arborescence, workflow
-- `.claude/agents/` — subagents spécialisés (`recon-specialist`, `vuln-hunter`, `report-writer`, `js-analyzer`)
-- `.claude/commands/` — slash commands
-- `.claude/skills/` — méthodologie par type de faille (XSS, SQLi, IDOR, SSRF, JWT)
-- `.claude/settings.json` — permissions pré-configurées pour les outils recon classiques
-
-### 2. Pipeline Python standalone
+### B. Autopilot (Claude orchestre tout via tool use)
 
 ```bash
-pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
-echo "example.com" > scope.txt
+echo "example.com" >> scope.txt
 
-python3 IABounty.py --target example.com --claude --serve
+python3 IABounty.py --target example.com --autopilot
+# OU
+python3 autopilot.py --target example.com
 ```
 
-Options :
+Claude utilise ses propres tools pour :
+- Lancer `subfinder`, `httpx`, `gau`, `paramspider`, `katana`
+- Lire les outputs, prioriser les endpoints
+- Lancer des probes XSS non-destructives (marqueur `xssTEST1234`)
+- Écrire les findings dans `findings/<slug>.md`
+- Décider quand s'arrêter via `finish()`
 
-| Flag | Effet |
-|------|-------|
-| `--target <domain>` | Domaine cible (doit être dans `scope.txt`) |
-| `--claude` | Active l'analyse Claude (extraction, classification, analyse endpoint-par-endpoint) |
-| `--model <id>` | Modèle Claude (défaut : `claude-opus-4-7`, override via `ANTHROPIC_MODEL` env) |
-| `--vulns` | Types de failles ciblés (défaut : `xss,sqli,idor,ssrf,jwt`) |
-| `--serve` | Lance le viewer Flask sur http://localhost:5000 |
-| `--verbose` | Affiche chaque commande système |
-| `--skip-scope-check` | **Dangereux.** À réserver aux labs/CTF. |
+État persisté dans `state/current.json` (suivi temps réel possible depuis la web UI).
+
+### C. Depuis ton téléphone
+
+#### Option 1 : Web UI mobile-first
+
+```bash
+export BUGBOUNTY_WEB_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
+python3 webapp.py --host 0.0.0.0 --port 8080
+```
+
+Puis sur ton téléphone : `http://<ip-locale-ou-tunnel>:8080/?token=<TOKEN>`
+
+Pour exposer en HTTPS depuis l'extérieur :
+```bash
+cloudflared tunnel --url http://localhost:8080
+# ou
+ngrok http 8080
+```
+
+L'UI permet : ajouter au scope, lancer/annuler un scan (autopilot, pipeline, ou recon), voir le live status, parcourir les findings, télécharger les rapports.
+
+#### Option 2 : Bot Telegram
+
+```bash
+# 1. Crée un bot via @BotFather, récupère le token
+# 2. Récupère ton chat_id (envoie /start au bot puis :
+#    https://api.telegram.org/bot<TOKEN>/getUpdates)
+export TELEGRAM_BOT_TOKEN=...
+export TELEGRAM_ALLOWED_CHATS=123456789  # whitelist obligatoire
+export ANTHROPIC_API_KEY=sk-ant-...
+
+pip install 'python-telegram-bot[job-queue]>=21.0'
+python3 bot.py
+```
+
+Commandes du bot : `/scan <domain> [autopilot|pipeline|recon]`, `/status`, `/findings`, `/finding <slug>`, `/scope`, `/scopeadd <domain>`, `/cancel`, `/help`. Notification automatique à la fin du scan.
+
+#### Option 3 : Termux (tout sur Android)
+
+```bash
+# Dans Termux :
+pkg install git
+git clone https://github.com/byAz1nee/BugBounty-AI.git
+cd BugBounty-AI
+bash install_termux.sh
+```
+
+Le script installe : python, go, subfinder, httpx, katana, gau, waybackurls, assetfinder, gf, dalfox, paramspider, et toutes les deps Python. Voir la fin du script pour les étapes de configuration.
 
 ---
 
-## Prérequis outils CLI
+## Installation (Linux / macOS)
 
-Mets ces outils dans ton PATH (via `go install` ou package manager) :
+```bash
+git clone https://github.com/byAz1nee/BugBounty-AI.git
+cd BugBounty-AI
+pip install -r requirements.txt
+# pip install 'python-telegram-bot[job-queue]>=21.0'   # optionnel pour le bot
 
-- **Recon passive** : `subfinder`, `gau`, `waybackurls`
-- **Probing** : `httpx`
-- **Params** : `paramspider`
-- **Crawling** : `katana`
-- **Optionnels actifs** (demandent confirmation dans Claude Code) : `nuclei`, `ffuf`, `sqlmap`, `dalfox`
+# Outils Go (recon)
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/lc/gau/v2/cmd/gau@latest
+go install github.com/tomnomnom/waybackurls@latest
+
+cp scope.txt.example scope.txt   # puis édite avec tes domaines
+```
+
+---
+
+## Variables d'environnement
+
+| Var | Rôle |
+|-----|------|
+| `ANTHROPIC_API_KEY` | **Obligatoire** pour Claude |
+| `ANTHROPIC_MODEL` | Modèle (défaut : `claude-opus-4-7`) |
+| `BUGBOUNTY_WEB_TOKEN` | Token de la web UI (auto-généré si absent) |
+| `TELEGRAM_BOT_TOKEN` | Token du bot Telegram |
+| `TELEGRAM_ALLOWED_CHATS` | Whitelist chat_id (CSV) — refus si absent |
 
 ---
 
@@ -78,60 +139,44 @@ Mets ces outils dans ton PATH (via `go install` ou package manager) :
 
 ```
 BugBounty-AI/
-├── CLAUDE.md                       # Guide pour Claude Code
-├── IABounty.py                     # Pipeline Python (recon + Claude)
-├── requirements.txt
-├── scope.txt                       # Domaines autorisés (à créer)
-├── recon/                          # Outputs outils recon
-├── rapport/                        # endpoints.json, classified_endpoints.json, analyse_js.md
-├── findings/                       # Un .md par vulnérabilité confirmée
+├── IABounty.py              # Pipeline + entry --autopilot
+├── autopilot.py             # Boucle agentique Claude
+├── webapp.py                # Web UI mobile-first
+├── bot.py                   # Bot Telegram
+├── install_termux.sh        # Bootstrap Android
+├── scope.txt[.example]      # Domaines autorisés
+├── recon/                   # Outputs outils recon
+├── rapport/                 # Endpoints classés, analyses
+├── findings/                # Findings confirmés
+│   └── _candidates/         # À valider manuellement
+├── state/                   # current.json, autopilot.log, stdout.log
 └── .claude/
-    ├── settings.json               # Permissions & env
-    ├── agents/                     # Subagents
-    │   ├── recon-specialist.md
-    │   ├── vuln-hunter.md
-    │   ├── report-writer.md
-    │   └── js-analyzer.md
-    ├── commands/                   # Slash commands
-    │   ├── recon.md
-    │   ├── hunt.md
-    │   ├── analyze.md
-    │   ├── poc.md
-    │   ├── report.md
-    │   ├── triage.md
-    │   └── scope-add.md
-    └── skills/                     # Méthodologies par type de faille
-        ├── xss-hunting.md
-        ├── sqli-techniques.md
-        ├── idor-testing.md
-        ├── ssrf-bypasses.md
-        └── jwt-attacks.md
+    ├── settings.json
+    ├── agents/   (4 subagents)
+    ├── commands/ (9 slash commands)
+    └── skills/   (5 méthodologies vuln)
 ```
 
 ---
 
-## Règles éthiques (non-négociables)
+## Sécurité & éthique
 
-Le workspace n'opère **que** sur des domaines présents dans `scope.txt`. Claude (et ses subagents) sont configurés pour :
+Le workspace n'opère **que** sur les domaines présents dans `scope.txt`. Garde-fous appliqués automatiquement :
 
-- Refuser tout test en dehors du scope
-- Éviter les actions destructives (DROP, DELETE, brute-force massif, DoS)
-- Respecter les rate-limits
-- Ne jamais commiter de credentials, cookies de session, ou données réelles de tiers
-- Redacter PII / tokens dans les rapports
+- **Mode autopilot** : whitelist de binaires, `curl` GET/HEAD seulement, refus des patterns destructifs (`rm -rf /`, `DROP TABLE`, fork bomb, sudo, pipe-to-shell), quota 10 probes XSS, loop max 40 itérations.
+- **Web UI** : auth token obligatoire, refus si la cible n'est pas dans `scope.txt`.
+- **Bot Telegram** : whitelist `chat_id` obligatoire, refus si la cible n'est pas dans `scope.txt`.
+- **Pipeline classique** : `--skip-scope-check` à n'utiliser qu'en CTF/lab.
 
----
-
-## Ajouter une nouvelle méthodologie
-
-Crée un fichier dans `.claude/skills/<vuln>-<action>.md` en suivant la structure des skills existantes (identification → payloads → bypass → impact → PoC → éthique), puis ajoute le mapping dans `.claude/commands/hunt.md` si tu veux l'exposer via `/hunt <category>`.
+`.gitignore` exclut `findings/`, `recon/`, `rapport/`, `state/`, `scope.txt`, et tous les patterns secrets (.env, .pem, id_rsa).
 
 ---
 
 ## Roadmap
 
-- [ ] Intégration `nuclei` templates custom par catégorie
-- [ ] Subagent `graphql-hunter` dédié
-- [ ] Export auto H1/Bugcrowd via leurs APIs (opt-in)
-- [ ] Skills XXE, SSTI, RCE, LFI
-- [ ] Hook post-recon qui relance automatiquement `vuln-hunter` sur le top 5
+- [ ] Hook post-scan : envoie notification Telegram avec top 3 findings
+- [ ] Skills XXE, SSTI, RCE, LFI, GraphQL
+- [ ] Dashboard avec stats cumulées (findings/jour, taux d'acceptation)
+- [ ] Intégration nuclei templates custom par catégorie
+- [ ] Export auto vers H1/Bugcrowd (opt-in, jamais auto-submit)
+- [ ] Worker en arrière-plan pour relancer les scans périodiquement

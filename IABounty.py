@@ -263,11 +263,15 @@ def parse_args():
     parser.add_argument("--vulns", default="xss,sqli,idor,ssrf,jwt",
                         help="Types de failles à viser (virgule)")
     parser.add_argument("--claude", action="store_true",
-                        help="Activer l'analyse Claude (nécessite ANTHROPIC_API_KEY)")
+                        help="Pipeline classique : recon + analyse Claude (nécessite ANTHROPIC_API_KEY)")
+    parser.add_argument("--autopilot", action="store_true",
+                        help="Mode autonome : Claude orchestre recon + tri + probes + findings via tool use")
+    parser.add_argument("--max-iterations", type=int, default=40,
+                        help="Plafond d'itérations en mode autopilot (défaut : 40)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
-                        help=f"Modèle Claude à utiliser (défaut : {DEFAULT_MODEL})")
+                        help=f"Modèle Claude (défaut : {DEFAULT_MODEL}, override par ANTHROPIC_MODEL)")
     parser.add_argument("--serve", action="store_true",
-                        help="Lancer le viewer Flask à la fin sur http://localhost:5000")
+                        help="Lancer le viewer Flask local à la fin (legacy ; utilise webapp.py pour le mobile)")
     parser.add_argument("--skip-scope-check", action="store_true",
                         help="Ne pas vérifier scope.txt (à utiliser en CTF/lab uniquement)")
     parser.add_argument("--verbose", action="store_true")
@@ -282,6 +286,19 @@ def main():
     if not args.skip_scope_check and not check_scope(args.target):
         return 1
 
+    if args.autopilot:
+        from autopilot import run_autopilot
+        print(f"[+] Autopilot lancé sur {args.target}")
+        final_state = run_autopilot(
+            args.target, workspace=".", model=args.model,
+            max_iterations=args.max_iterations,
+        )
+        print(json.dumps(final_state, indent=2))
+        if args.serve:
+            print("[+] Viewer (legacy) : http://localhost:5000")
+            app.run(host="127.0.0.1", port=5000, debug=False)
+        return 0 if final_state.get("status") == "done" else 2
+
     vuln_types = [v.strip() for v in args.vulns.split(",") if v.strip()]
     recon_text = reconnaissance(args.target, args.verbose)
 
@@ -294,7 +311,8 @@ def main():
                 analyze_endpoints(client, categories, vuln_types)
 
     if args.serve:
-        print("[+] Viewer : http://localhost:5000")
+        print("[+] Viewer (legacy) : http://localhost:5000")
+        print("[+] Pour la version mobile : python3 webapp.py --host 0.0.0.0 --port 5000")
         app.run(host="127.0.0.1", port=5000, debug=False)
 
     return 0
