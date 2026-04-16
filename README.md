@@ -8,9 +8,18 @@ Workspace bug bounty utilisable de **trois façons** :
 
 L'objectif : passer moins de temps à scroller des endpoints, et plus à trouver des failles exploitables.
 
-> 📱 **Tu veux bosser depuis un iPhone sans terminal ?** Suis [IPHONE.md](IPHONE.md) — déploiement Railway en 10 min, ensuite tu utilises Safari + Telegram et c'est tout.
+> 📱 **Tu veux bosser depuis un iPhone sans terminal ?** Suis [IPHONE.md](IPHONE.md) — déploiement Railway + usage via ton abonnement Claude Max (**0€ d'API**), Safari + Telegram pour piloter.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/byAz1nee/BugBounty-AI)
+
+## 🔑 Deux modes d'auth Claude
+
+| Mode | Variable d'env | Coût |
+|------|----------------|------|
+| **Subscription Max** (recommandé si tu as Max/Pro) | `CLAUDE_CODE_OAUTH_TOKEN` (généré avec `claude setup-token`) | **0€** — consommé contre ton abo |
+| **API** | `ANTHROPIC_API_KEY` | facturé au token |
+
+L'autopilot détecte automatiquement laquelle est configurée. Si les deux sont présentes, il utilise le token Max. Voir [IPHONE.md](IPHONE.md) pour générer le token.
 
 ---
 

@@ -1,67 +1,94 @@
-# BugBounty-AI sur iPhone — setup sans terminal
+# BugBounty-AI sur iPhone avec ton abonnement Claude Max
 
-**Tu n'as que ton iPhone.** Tu ne veux pas taper dans un terminal. Tu acceptes de payer ~5€/mois.
+Tu as **Claude Max** à ~100€/mois. Tu ne veux **pas** payer l'API en plus. C'est l'usage supporté ici — on utilise ton abo via un **OAuth token** qui remplace la clé API.
 
-On déploie l'app sur **Railway** (plateforme cloud). Tu fais **tout dans Safari**, en tapant dans des formulaires. Ensuite tu bosses depuis :
-
-- **Safari** (web UI mobile-first) — pour lancer des scans et lire les findings
-- **Telegram** (optionnel) — notifications push et contrôle par commandes
-
-**Temps : 10 min. Coût : ~5€/mois** (crédits Railway ; la première fois tu as 5$ offerts).
+**Principe** : Claude Code (la CLI d'Anthropic) sait s'authentifier avec ton abonnement via un token long-vécu (`CLAUDE_CODE_OAUTH_TOKEN`). L'autopilot l'utilise via `claude -p`. Résultat : **0€ d'API**, consommation contre ton quota Max.
 
 ---
 
-## Étape 1 — Récupère ta clé API Anthropic
+## Ce que tu vas obtenir
 
-Dans Safari, va sur [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) :
-
-1. Sign in (compte Anthropic requis, gratuit)
-2. **Create Key** → nomme-la `bugbounty` → **Create**
-3. **Copie la clé** (elle commence par `sk-ant-`). Tu ne pourras plus la voir après.
-
-Mets-la de côté dans l'app Notes de ton iPhone.
+- Une **web app mobile** accessible dans Safari, déployée sur Railway (~5€/mo pour le serveur)
+- Autopilot entièrement piloté par Claude (via ton abo Max, aucun coût API)
+- Optionnel : bot Telegram pour notifs push
+- **Total récurrent** : ~5€/mo Railway + 0€ API = **≤5€/mo en plus de ton Max**
 
 ---
 
-## Étape 2 — Fork le dépôt sur GitHub
+## Vue d'ensemble
 
-1. Va sur [github.com/byAz1nee/BugBounty-AI](https://github.com/byAz1nee/BugBounty-AI)
-2. Sign in (compte GitHub requis, gratuit)
-3. Tape **Fork** (coin haut droit) → **Create fork**
-4. Tu as maintenant ton propre fork, par exemple `github.com/<ton-pseudo>/BugBounty-AI`
+Tu as trois étapes :
 
----
+1. **Générer le token OAuth** une seule fois (`claude setup-token`)
+2. **Déployer sur Railway** en 1-click depuis Safari
+3. **Coller le token** dans Railway → usage illimité
 
-## Étape 3 — Déploie sur Railway
-
-1. Va sur [railway.com](https://railway.com) dans Safari
-2. **Login with GitHub** (autorise Railway à lire ton fork)
-3. Sur le dashboard : **+ New Project** → **Deploy from GitHub repo**
-4. Sélectionne ton fork **BugBounty-AI**
-5. Railway détecte automatiquement le `Dockerfile` et commence le build
-
-Pendant le build (~5 min) :
-
-6. Tape sur le service *BugBounty-AI* dans le projet → onglet **Variables** → **+ New Variable**
-7. Ajoute ces 3 variables une par une :
-
-   | Name | Value |
-   |------|-------|
-   | `ANTHROPIC_API_KEY` | colle ta clé `sk-ant-...` |
-   | `BUGBOUNTY_WEB_TOKEN` | génère 24 chars aléatoires (ex : `J8f3kL9mN2pQ7rT4uY6wX1zA`) |
-   | `ANTHROPIC_MODEL` | `claude-opus-4-7` |
-
-8. Onglet **Settings** → section **Networking** → **Generate Domain** → Railway te donne une URL du type `bugbounty-ai-production.up.railway.app`
-9. Onglet **Settings** → section **Volumes** → **+ New Volume** :
-   - Mount Path : `/app/findings`
-   - Size : 1 GB
-   *(pour que tes findings survivent aux redémarrages)*
-
-Une fois le build fini (tu vois **Active** en vert), l'URL est opérationnelle.
+Le token dure 1 an. Tu le regénères 1 fois par an.
 
 ---
 
-## Étape 4 — Ouvre l'app dans Safari
+## Étape 1 — Générer `CLAUDE_CODE_OAUTH_TOKEN`
+
+C'est l'étape qui demande **un accès ponctuel à un terminal** (une fois dans l'année). Trois options, par ordre de simplicité :
+
+### Option A — Sur un Mac/PC/Linux que tu peux emprunter (5 min)
+
+```bash
+# 1. Installe Claude Code
+curl -fsSL https://claude.ai/install.sh | bash
+
+# 2. Génère le token — ouvre un navigateur pour le login Max
+claude setup-token
+```
+
+Le CLI imprime un token qui commence par `sk-ant-oat01-...`. **Copie-le.**
+
+### Option B — Depuis ton iPhone via Railway (10 min, 0 PC nécessaire)
+
+Après avoir déployé sur Railway (étape 2), utilise le terminal web de Railway :
+
+1. Dashboard Railway → ton service → menu **⋯** → **Shell** (terminal web, accessible dans Safari)
+2. Dans ce terminal : tape `claude setup-token`
+3. Le CLI affiche une URL `https://claude.ai/oauth/authorize?...`
+4. **Tape longuement sur l'URL** dans Safari → *Copier* → colle dans un nouvel onglet Safari
+5. Connecte-toi avec ton compte Max, autorise
+6. Safari te redirige vers une page avec un code à copier (ou Safari te montre une erreur avec le code dans l'URL)
+7. Colle le code dans le shell Railway → token généré, s'affiche
+8. Copie le token
+
+### Option C — Via GitHub Codespaces (10 min)
+
+1. Safari → [github.com/codespaces](https://github.com/codespaces) → lance un codespace sur ton fork BugBounty-AI
+2. Dans le terminal du codespace : `curl -fsSL https://claude.ai/install.sh | bash && ~/.local/bin/claude setup-token`
+3. Suis l'OAuth en Safari
+4. Copie le token affiché
+
+---
+
+## Étape 2 — Déploie sur Railway
+
+Si c'est pas encore fait :
+
+1. **Fork** : Safari → [github.com/byAz1nee/BugBounty-AI](https://github.com/byAz1nee/BugBounty-AI) → **Fork**
+2. **Déploie** : Safari → [railway.com](https://railway.com) → **Login with GitHub** → **+ New Project** → **Deploy from GitHub repo** → ton fork
+3. Railway détecte le Dockerfile et build (~5 min pendant que tu prépares les variables)
+
+**Variables à ajouter** (onglet *Variables* du service) :
+
+| Name | Value | Notes |
+|------|-------|-------|
+| `CLAUDE_CODE_OAUTH_TOKEN` | `sk-ant-oat01-...` | **⭐ celui de l'étape 1** |
+| `BUGBOUNTY_WEB_TOKEN` | 24 caractères aléatoires (ex. `J8f3kL9mN2pQ7rT4uY6wX1zA`) | auth de la web UI |
+
+**⚠ Ne mets PAS `ANTHROPIC_API_KEY`** — si elle est là, Claude Code l'utilise à la place du token subscription (et tu paies l'API).
+
+**Networking** (Settings) → **Generate Domain** → URL HTTPS du type `bugbounty-ai-production.up.railway.app`.
+
+**Volume** (Settings) → **+ New Volume** → Mount Path `/app/findings`, Size `1 GB`. Les findings survivront aux redémarrages.
+
+---
+
+## Étape 3 — Vérifie & bosse
 
 Ouvre dans Safari :
 
@@ -69,152 +96,135 @@ Ouvre dans Safari :
 https://<ton-domaine-railway>/?token=<TON-BUGBOUNTY-WEB-TOKEN>
 ```
 
-Exemple :
-```
-https://bugbounty-ai-production.up.railway.app/?token=J8f3kL9mN2pQ7rT4uY6wX1zA
-```
+Tu devrais voir un bandeau :
 
-Tu vois le **dashboard noir mobile-first**.
+> ✅ **Claude Max subscription** active (via `CLAUDE_CODE_OAUTH_TOKEN`) — les scans autopilot utilisent ton abonnement, pas l'API.
 
-> 💡 **Ajoute à l'écran d'accueil** : menu partage Safari → *Sur l'écran d'accueil*. Tu auras une icône comme une app native.
+Si tu vois plutôt 💳 *API key active* : tu as laissé `ANTHROPIC_API_KEY` dans les variables. Supprime-la et redémarre le service.
 
----
-
-## Étape 5 — Lance ta première chasse
-
-Dans le dashboard :
-
-1. **Scope vide** → dans le champ, tape ton domaine autorisé (programme HackerOne/Bugcrowd officiel) → **Ajouter au scope**
-2. **Lancer un scan** :
-   - Cible : ton domaine
-   - Mode : **Autopilot (Claude orchestre tout)**
-   - **Démarrer**
-3. La page **Status** s'affiche (refresh auto toutes les 5s)
-4. Les findings apparaissent dans l'onglet **Findings** au fur et à mesure
-
-**Tu peux fermer Safari.** Le scan continue côté Railway. Reviens quand tu veux.
+**Ajoute à l'écran d'accueil** : menu partage Safari → *Sur l'écran d'accueil*.
 
 ---
 
-## Bonus — Notifications Telegram sur ton iPhone
+## Lance ta première chasse
 
-Pour recevoir une notification push quand un scan se termine (et contrôler par commandes) :
-
-### Crée un bot Telegram
-
-Dans l'app Telegram sur ton iPhone :
-
-1. Cherche **@BotFather** → lance-le → `/newbot`
-2. Donne un nom, puis un username (finit par `bot`)
-3. BotFather te donne un **token** (format `123456:ABC-DEF...`). Copie-le.
-
-### Trouve ton chat_id
-
-1. Cherche ton nouveau bot dans Telegram → `/start`
-2. Dans Safari, ouvre : `https://api.telegram.org/bot<TON-TOKEN>/getUpdates`
-3. Cherche `"chat":{"id":123456789` → **c'est ton chat_id**
-
-### Ajoute les variables sur Railway
-
-Retourne sur Railway → ton service → **Variables** → ajoute :
-
-| Name | Value |
-|------|-------|
-| `TELEGRAM_BOT_TOKEN` | le token BotFather |
-| `TELEGRAM_ALLOWED_CHATS` | ton chat_id (juste le nombre) |
-
-**Attention** : Railway va redémarrer ton service automatiquement.
-
-### Démarre le bot
-
-Actuellement, le service Railway ne lance que le webapp. Pour ajouter le bot Telegram :
-
-1. Sur Railway, dans ton projet → **+ Create** → **Empty Service** → renomme-le `bot`
-2. **Settings** → **Source** → **Connect Repo** → ton fork BugBounty-AI
-3. **Settings** → **Deploy** → **Custom Start Command** :
-   ```
-   python3 bot.py
-   ```
-4. **Variables** → **Add reference** → copie les 3 mêmes variables du premier service
-5. Deploy → tu peux maintenant envoyer `/scan example.com` depuis Telegram
+Dans l'app :
+1. Tape ton domaine autorisé → **Ajouter au scope**
+2. Mode : **Autopilot** → **Démarrer**
+3. Ferme l'app. Claude (via ton abo Max) fait la chasse.
+4. Reviens voir les findings dans l'onglet **Findings**.
 
 ---
 
-## Utilisation quotidienne
+## Bonus — Telegram pour les notifs push
 
-### Depuis Safari
-1. Ouvre ton raccourci iPhone
-2. Tape **Démarrer** avec ta cible
-3. Fais autre chose
-4. Reviens plus tard voir les findings
+Sans ça, tu dois ouvrir Safari régulièrement. Avec ça, ton iPhone vibre à la fin du scan.
 
-### Depuis Telegram
+### Crée un bot
+Telegram app → cherche **@BotFather** → `/newbot` → nomme-le → **token**.
+
+### Trouve ton `chat_id`
+1. Ouvre ton bot dans Telegram → `/start`
+2. Safari → `https://api.telegram.org/bot<TON-TOKEN>/getUpdates` → trouve `"chat":{"id":XXXX`
+
+### Configure
+Railway → Variables :
+- `TELEGRAM_BOT_TOKEN` = le token BotFather
+- `TELEGRAM_ALLOWED_CHATS` = ton chat_id
+
+### Démarre un 2e service
+Railway → ton projet → **+ Create** → **Empty Service** → renomme `bot` :
+- **Settings → Source** → Connect le même repo
+- **Settings → Deploy → Custom Start Command** : `python3 bot.py`
+- **Variables** → partage les 3 vars précédentes (`CLAUDE_CODE_OAUTH_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_CHATS`) via **Shared Variables**
+
+Depuis Telegram sur ton iPhone :
+
 ```
-/scan example.com          → autopilot
-/status                     → où on en est
+/scan example.com          → lance autopilot
+/status                     → état
 /findings                   → liste
-/finding xss-exemple-slug   → contenu complet du finding
-/cancel                     → stop le scan
+/finding <slug>             → détail
 ```
 
 ---
 
-## Qui pilote l'attaque ?
+## Qui pilote ? Vraiment ?
 
-**Claude (moi, `claude-opus-4-7` via l'API Anthropic).**
+**Claude (moi) via `claude -p` en mode headless**, authentifié par ton OAuth token Max.
 
-Dans `autopilot.py`, il y a une boucle :
+`autopilot_max.py` :
 
+```python
+cmd = [
+    "claude", "-p",
+    "--dangerously-skip-permissions",
+    "--output-format", "stream-json",
+    prompt,  # "Fais recon + tri + probes XSS + findings sur <target>"
+]
+env["CLAUDE_CODE_OAUTH_TOKEN"] = ...  # ton abo
+subprocess.Popen(cmd, env=env)
 ```
-tant que pas fini :
-    réponse = claude.envoie(tools=[run_command, probe_xss, write_finding, ...])
-    pour chaque action_demandée par Claude :
-        exécute-la (avec garde-fous)
-        renvoie le résultat à Claude
-    si Claude dit "finish" : stop
-```
 
-Claude choisit :
-- Quels outils lancer (`subfinder`, `httpx`, `gau`, etc.) et avec quels flags
-- Quels endpoints sont prometteurs
-- Quels paramètres GET tester en XSS
-- Quand écrire un finding (et quoi mettre dedans)
-- Quand s'arrêter
+Côté Claude Code (moi) dans le container Railway : j'ai accès à `.claude/agents/`, `.claude/skills/`, `.claude/commands/` → je peux déléguer à `recon-specialist`, `vuln-hunter`, appliquer les méthodo XSS/SQLi/IDOR/SSRF/JWT, écrire les findings, etc.
 
-Le Python ne fait que **exécuter** et **refuser ce qui est dangereux** (rm -rf, DROP TABLE, curl POST, sudo…).
+Les **garde-fous** s'appliquent toujours :
+- Scope vérifié contre `scope.txt` avant tout lancement
+- Prompt autopilot impose "pas de test destructif, curl GET-only, 10 probes XSS max"
+- Volume Railway garde tes findings
 
 ---
 
-## Coût
+## Coût récapitulatif
 
-Railway facture à l'usage. Pour un scanner qui tourne épisodiquement :
+| Item | Coût |
+|------|------|
+| Claude Max (déjà chez toi) | ~100€/mo |
+| Railway Hobby (serveur) | **~5€/mo** |
+| API Anthropic | **0€** (tu utilises le Max) |
+| Domaine Railway | gratuit (`*.up.railway.app`) |
+| **Total supplémentaire** | **~5€/mo** |
 
-- **Hobby plan** : 5$/mois inclus (crédit)
-- Web service + volume 1 GB : **~3-5$/mois** en usage typique
-- Tu es alerté bien avant de dépasser ton crédit
+Pour comparaison avec l'API : un autopilot complet peut coûter 0.50 à 5€ de tokens avec `claude-opus-4-7`. Sur 20 scans/mois c'est 10-100€. **Le token OAuth t'épargne ça.**
 
-Les **tokens Claude** sont facturés séparément sur ton compte Anthropic. Comptes :
+---
 
-- **Autopilot par domaine** : ~0.50€ à 2€ selon la taille de la recon (avec `claude-opus-4-7`)
-- Si tu veux réduire → mets `ANTHROPIC_MODEL=claude-sonnet-4-6` dans Railway (~3x moins cher)
+## Limites à savoir
+
+- **Quota Max** : l'abonnement a des limites de requêtes/messages par 5h. Si tu lances beaucoup de scans d'affilée, tu peux atteindre la limite (le scan se mettra en pause temporairement).
+- **Durée du token** : 1 an. Garde un calendrier pour le regénérer.
+- **Rate limit Anthropic** : si tu exécutes des scans en parallèle, Claude Code peut temporiser. Un scan à la fois = pas de problème.
 
 ---
 
 ## Problèmes fréquents
 
-| Symptôme | Solution |
-|----------|----------|
-| Page Railway 502 | Build pas fini, attends 2 min |
-| `Token invalide` dans Safari | Vérifie que `?token=...` match ton `BUGBOUNTY_WEB_TOKEN` |
-| Scan reste en *running* pendant des heures | Railway l'a peut-être killé (mémoire). `Restart` le service, relance. |
-| Findings perdus après redémarrage | Tu as oublié le volume sur `/app/findings` (étape 3, point 9) |
-| Claude refuse de tester | Ta cible n'est pas dans `scope.txt`. Ajoute-la depuis le dashboard. |
+| Symptôme | Fix |
+|----------|-----|
+| Bandeau web UI = `❌ Aucune auth` | Oublié de poser `CLAUDE_CODE_OAUTH_TOKEN` dans Railway. Ajoute-le et redémarre. |
+| Bandeau = `💳 API key active` alors que tu veux le Max | Supprime `ANTHROPIC_API_KEY` des vars Railway. |
+| `claude: command not found` dans les logs | Le build Docker a échoué à installer Claude Code. Redéploie (parfois transient). |
+| `Authentication error` | Token OAuth expiré (1 an) ou révoqué. Regénère-en un. |
+| Le scan reste en `running` des heures | Railway l'a peut-être killé. Restart le service et relance. |
+| `Findings` vide alors que le scan a tourné | Regarde `state/claude_max.log` (bouton *Logs* en haut) pour voir où ça bloque. |
 
 ---
 
-## Alternatives si Railway ne te convient pas
+## Si tu veux tester sans encore déployer sur Railway
 
-- **Render.com** : même principe, utilise `render.yaml` fourni dans le repo. Gratuit si tu acceptes que le service dorme après 15 min d'inactivité.
-- **Fly.io** : `fly launch --dockerfile` depuis un terminal. Gratuit généreux.
-- **GitHub Codespaces** : voir `IPHONE.md` dans les anciennes versions (terminal nécessaire — pas top sur iPhone).
-- **Raspberry Pi chez toi** + `docker run` : une fois par un pote, puis iPhone seul pour toujours.
+Si tu as un Mac/PC à portée :
+
+```bash
+git clone https://github.com/<ton-pseudo>/BugBounty-AI
+cd BugBounty-AI
+pip install -r requirements.txt
+curl -fsSL https://claude.ai/install.sh | bash       # installe Claude Code
+claude setup-token                                    # génère le token (Safari OAuth)
+export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...
+echo "example.com" > scope.txt
+python3 autopilot_max.py --target example.com
+```
+
+Ça utilise ton abo Max, aucun coût API.
+
+Ensuite tu déploies sur Railway pour pouvoir piloter depuis l'iPhone en permanence.

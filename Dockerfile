@@ -30,6 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git curl wget ca-certificates jq dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
+# Claude Code CLI — permet d'utiliser l'abonnement Claude Max via OAuth token
+# (évite les coûts API si CLAUDE_CODE_OAUTH_TOKEN est configuré)
+RUN curl -fsSL https://claude.ai/install.sh | bash || \
+    echo "[warn] Claude Code install failed — autopilot Max ne fonctionnera pas tant que le binaire n'est pas en PATH"
+ENV PATH="/root/.local/bin:${PATH}"
+
 COPY --from=gobuilder /go/bin/subfinder /usr/local/bin/
 COPY --from=gobuilder /go/bin/httpx /usr/local/bin/
 COPY --from=gobuilder /go/bin/katana /usr/local/bin/

@@ -212,6 +212,17 @@ def index():
   {% endif %}
 </div>
 
+<div class="card">
+  <h2>Configuration auth</h2>
+  {% if oauth_ok %}
+    <p>✅ <strong>Claude Max subscription</strong> active (via <code>CLAUDE_CODE_OAUTH_TOKEN</code>) — les scans autopilot utilisent ton abonnement, pas l'API.</p>
+  {% elif api_ok %}
+    <p>💳 <strong>API key</strong> active (<code>ANTHROPIC_API_KEY</code>) — facturé au token. Pour utiliser ton abo Max : ajoute <code>CLAUDE_CODE_OAUTH_TOKEN</code> dans les variables d'env (voir IPHONE.md).</p>
+  {% else %}
+    <p>❌ Aucune auth Claude configurée. Ajoute <code>CLAUDE_CODE_OAUTH_TOKEN</code> (Max) ou <code>ANTHROPIC_API_KEY</code> (API).</p>
+  {% endif %}
+</div>
+
 {% if state %}
 <div class="card">
   <h2>Dernier scan</h2>
@@ -229,7 +240,11 @@ def index():
 </div>
 {% endif %}
 """
-    return render(body, "Dashboard", scope=scope_targets(), state=state, running=running)
+    return render(
+        body, "Dashboard", scope=scope_targets(), state=state, running=running,
+        oauth_ok=bool(os.getenv("CLAUDE_CODE_OAUTH_TOKEN")),
+        api_ok=bool(os.getenv("ANTHROPIC_API_KEY")),
+    )
 
 
 @app.route("/scope/add", methods=["POST"])
@@ -259,7 +274,15 @@ def start_scan():
         abort(400, f"Domaine '{target}' absent de scope.txt")
 
     if mode == "autopilot":
-        cmd = ["python3", "-u", "autopilot.py", "--target", target, "--max-iterations", str(max_iter)]
+        # Préfère le token Max (gratuit via subscription) sur l'API key (payant)
+        if os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
+            cmd = ["python3", "-u", "autopilot_max.py", "--target", target,
+                   "--max-iterations", str(max_iter)]
+        elif os.getenv("ANTHROPIC_API_KEY"):
+            cmd = ["python3", "-u", "autopilot.py", "--target", target,
+                   "--max-iterations", str(max_iter)]
+        else:
+            abort(500, "Aucune auth Claude : configure CLAUDE_CODE_OAUTH_TOKEN (Max) ou ANTHROPIC_API_KEY (API)")
     elif mode == "pipeline":
         cmd = ["python3", "-u", "IABounty.py", "--target", target, "--claude"]
     else:

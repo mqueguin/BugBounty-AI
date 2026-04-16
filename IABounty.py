@@ -265,7 +265,10 @@ def parse_args():
     parser.add_argument("--claude", action="store_true",
                         help="Pipeline classique : recon + analyse Claude (nécessite ANTHROPIC_API_KEY)")
     parser.add_argument("--autopilot", action="store_true",
-                        help="Mode autonome : Claude orchestre recon + tri + probes + findings via tool use")
+                        help="Mode autonome : Claude orchestre recon + tri + probes + findings")
+    parser.add_argument("--force-api", action="store_true",
+                        help="En mode --autopilot, force l'utilisation de l'API (ANTHROPIC_API_KEY) "
+                             "même si CLAUDE_CODE_OAUTH_TOKEN (subscription Max) est défini")
     parser.add_argument("--max-iterations", type=int, default=40,
                         help="Plafond d'itérations en mode autopilot (défaut : 40)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
@@ -287,12 +290,21 @@ def main():
         return 1
 
     if args.autopilot:
-        from autopilot import run_autopilot
-        print(f"[+] Autopilot lancé sur {args.target}")
-        final_state = run_autopilot(
-            args.target, workspace=".", model=args.model,
-            max_iterations=args.max_iterations,
-        )
+        # Prefer Max subscription over API if available
+        if os.getenv("CLAUDE_CODE_OAUTH_TOKEN") and not args.force_api:
+            from autopilot_max import run_autopilot_max
+            print(f"[+] Autopilot Max (subscription) lancé sur {args.target}")
+            final_state = run_autopilot_max(
+                args.target, workspace=".",
+                max_iterations=args.max_iterations,
+            )
+        else:
+            from autopilot import run_autopilot
+            print(f"[+] Autopilot API lancé sur {args.target}")
+            final_state = run_autopilot(
+                args.target, workspace=".", model=args.model,
+                max_iterations=args.max_iterations,
+            )
         print(json.dumps(final_state, indent=2))
         if args.serve:
             print("[+] Viewer (legacy) : http://localhost:5000")

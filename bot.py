@@ -165,7 +165,10 @@ def main():
             )
             return
         if mode == "autopilot":
-            cmd = ["python3", "-u", "autopilot.py", "--target", target]
+            if os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
+                cmd = ["python3", "-u", "autopilot_max.py", "--target", target]
+            else:
+                cmd = ["python3", "-u", "autopilot.py", "--target", target]
         elif mode == "pipeline":
             cmd = ["python3", "-u", "IABounty.py", "--target", target, "--claude"]
         elif mode == "recon":
