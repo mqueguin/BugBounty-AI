@@ -1,0 +1,9 @@
+# Domaines autorisés — un par ligne. Les lignes commençant par # sont ignorées.
+# Copie ce fichier vers `scope.txt` (git-ignoré) et ajoute TES cibles.
+#
+# IMPORTANT : ne mets ici que des domaines explicitement listés dans un programme
+# bug bounty officiel (HackerOne, Bugcrowd, Intigriti, YesWeHack, programme privé).
+# Les sous-domaines sont souvent in-scope mais VÉRIFIE la policy.
+
+# example.com
+# api.example.com

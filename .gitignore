@@ -1,0 +1,26 @@
+# Artefacts recon / analyse — souvent contiennent du contenu qui ne doit pas être public
+recon/
+rapport/
+findings/
+js/
+
+# Scope parfois sensible (programmes privés)
+scope.txt
+
+# Secrets — ne jamais commit
+.env
+.env.*
+*.key
+*.pem
+id_rsa*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Claude Code local overrides
+.claude/settings.local.json

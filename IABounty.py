@@ -1,65 +1,67 @@
-import os
-import subprocess
-import requests
-import re
+"""
+IABounty — pipeline recon + analyse bug bounty piloté par Claude.
+
+Usage:
+    python3 IABounty.py --target example.com              # recon seule
+    python3 IABounty.py --target example.com --claude     # recon + analyse Claude
+    python3 IABounty.py --target example.com --claude --serve  # + web viewer
+"""
+
 import argparse
 import json
-from openai import OpenAI
-from urllib.parse import urlencode, parse_qs, urlsplit, urlunsplit
+import os
+import subprocess
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+
+import anthropic
+import requests
 from flask import Flask, render_template_string, send_file
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 BugBountyBot'}
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-parser = argparse.ArgumentParser(description="Copilote Bug Bounty AI")
-parser.add_argument("--target", required=True, help="Cible à scanner (ex: example.com)")
-parser.add_argument("--threads", type=int, default=10, help="Nombre de threads (futur usage)")
-parser.add_argument("--vulns", default="xss,sqli,idor,csrf", help="Types de failles à rechercher")
-parser.add_argument("--verbose", action="store_true", help="Afficher la sortie complète des commandes système")
-parser.add_argument("--openai", help="Utiliser OpenAI pour améliorer la recon")
-args = parser.parse_args()
-
-TARGET_DOMAIN = args.target
-VULN_TYPES = args.vulns.split(",")
+HEADERS = {"User-Agent": "Mozilla/5.0 BugBountyBot"}
+DEFAULT_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7")
+SCOPE_FILE = Path("scope.txt")
 
 app = Flask(__name__)
 
-@app.route('/')
+
+@app.route("/")
 def index():
-    if os.path.exists("rapport/analyse_js.md"):
-        with open("rapport/analyse_js.md", encoding="utf-8") as f:
-            content = f.read()
-    else:
-        content = "Aucun rapport généré pour l'instant. Lancez l'analyse."
-    html_template = f"""
+    report = Path("rapport/analyse_js.md")
+    content = report.read_text(encoding="utf-8") if report.exists() else \
+        "Aucun rapport généré pour l'instant. Lancez `python3 IABounty.py --target <domaine> --claude`."
+    html = """
     <html>
-        <head>
-            <title>Copilote Bug Bounty - Rapport</title>
-            <style>
-                body {{ font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 2em; }}
-                pre {{ background: #2d2d2d; padding: 1em; border-radius: 8px; overflow-x: auto; }}
-                h1 {{ color: #4ec9b0; }}
-            </style>
-        </head>
-        <body>
-            <h1>Rapport d'Analyse JS</h1>
-            <pre>{content}</pre>
-        </body>
+    <head>
+        <title>Copilote Bug Bounty — Rapport</title>
+        <style>
+            body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 2em; }
+            pre { background: #2d2d2d; padding: 1em; border-radius: 8px; overflow-x: auto; }
+            h1 { color: #4ec9b0; }
+            a { color: #569cd6; }
+        </style>
+    </head>
+    <body>
+        <h1>Rapport d'analyse</h1>
+        <p><a href="/download">Télécharger le rapport Markdown</a></p>
+        <pre>{{ content }}</pre>
+    </body>
     </html>
     """
-    return render_template_string(html_template)
+    return render_template_string(html, content=content)
 
-@app.route('/download')
+
+@app.route("/download")
 def download():
     return send_file("rapport/analyse_js.md", as_attachment=True)
 
-def run_command(cmd):
+
+def run_command(cmd, verbose=False):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if args.verbose:
-        print(f"[VERBOSE] Command: {cmd}")
-        print(result.stdout)
+    if verbose:
+        print(f"[CMD] {cmd}")
+        if result.stdout:
+            print(result.stdout)
         if result.stderr:
             print(f"[STDERR] {result.stderr}")
     return result.stdout.strip()
@@ -68,139 +70,235 @@ def run_command(cmd):
 def ensure_dir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
 
-def ensure_file_exists(path):
-    if not os.path.exists(path):
-        with open(path, "w") as f:
-            f.write("")
 
-def reconnaissance(domain):
-    print("[+] Reconnaissance étendue...")
+def check_scope(domain):
+    """Refuse d'agir si le domaine n'est pas dans scope.txt."""
+    if not SCOPE_FILE.exists():
+        print(f"[!] {SCOPE_FILE} absent. Créez-le avec les domaines autorisés (un par ligne).")
+        return False
+    allowed = {
+        line.strip().lower()
+        for line in SCOPE_FILE.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    if domain.lower() not in allowed:
+        print(f"[!] '{domain}' n'est pas dans {SCOPE_FILE}. Ajoutez-le avant de lancer.")
+        return False
+    return True
+
+
+def reconnaissance(domain, verbose=False):
+    print(f"[+] Reconnaissance sur {domain}")
     ensure_dir("recon")
-    subdomains = run_command(f"subfinder -d {domain} -silent")
-    with open("recon/subdomains.txt", "w") as f:
-        f.write(subdomains)
-    run_command("httpx-toolkit -l recon/subdomains.txt -silent -o recon/urls.txt")
-    run_command(f"gau {domain} | sort -u > recon/gau.txt")
-    run_command(f"waybackurls {domain} >> recon/gau.txt")
-    run_command(f"paramspider -d {domain} > recon/params.txt")
-    run_command(f"katana -list recon/subdomains.txt -jc -o recon/katana.txt")
+    run_command(f"subfinder -d {domain} -silent -o recon/subdomains.txt", verbose)
+    run_command("httpx -l recon/subdomains.txt -silent -o recon/live.txt", verbose)
+    run_command(f"gau {domain} 2>/dev/null | sort -u > recon/gau.txt", verbose)
+    run_command(f"waybackurls {domain} 2>/dev/null >> recon/gau.txt", verbose)
+    run_command(f"paramspider -d {domain} -o recon/params.txt 2>/dev/null", verbose)
+    run_command("katana -list recon/live.txt -jc -silent -o recon/katana.txt", verbose)
 
-    combined_text = ""
-    for file in ["recon/urls.txt", "recon/gau.txt", "recon/params.txt", "recon/katana.txt"]:
-        if os.path.exists(file):
-            with open(file) as f:
-                combined_text += f.read() + "\n"
+    combined = ""
+    for fname in ("recon/live.txt", "recon/gau.txt", "recon/params.txt", "recon/katana.txt"):
+        if Path(fname).exists():
+            combined += Path(fname).read_text(errors="ignore") + "\n"
+    Path("recon/all_urls.txt").write_text(combined)
+    return combined
 
-    prompt = f"""
-Tu es un expert en sécurité web. Voici un ensemble d'URLs collectées lors d'une phase de reconnaissance pour le domaine {domain} :
 
-{combined_text[:10000]}
+def claude_client():
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY non défini dans l'environnement.")
+    return anthropic.Anthropic()
 
-Identifie et extrait uniquement les endpoints intéressants pour un test de sécurité (ex: APIs, URLs dynamiques, interfaces d'administration, endpoints exposant des paramètres sensibles, etc.). Fournis une liste JSON de ces endpoints (uniquement les endpoints je ne veux pas de phrases ou mots supplémentaires).
-"""
 
+def extract_endpoints(client, domain, recon_text, vuln_types):
+    """Extrait les endpoints intéressants via Claude, avec prompt caching sur la recon brute."""
+    print("[+] Extraction des endpoints prioritaires (Claude)...")
+    recon_text = recon_text[:100_000]  # garde ~25k tokens max
+
+    system = (
+        "Tu es un expert en sécurité web spécialisé bug bounty. "
+        "Tu analyses des artefacts de reconnaissance et retournes uniquement un JSON valide, "
+        "sans prose ni markdown, sans ```."
+    )
+
+    user_prompt = f"""Voici les URLs collectées pour {domain} :
+
+<recon>
+{recon_text}
+</recon>
+
+Extrais les endpoints les plus prometteurs pour un test de sécurité
+(APIs, URLs paramétrées, admin, upload, redirect, fichiers sensibles...).
+Types de failles visées : {', '.join(vuln_types)}.
+
+Retourne UNIQUEMENT un JSON de la forme :
+{{
+  "endpoints": ["https://...", "https://..."],
+  "notes": "phrase courte sur la surface d'attaque"
+}}"""
+
+    response = client.messages.create(
+        model=DEFAULT_MODEL,
+        max_tokens=16_000,
+        system=system,
+        cache_control={"type": "ephemeral"},
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    ensure_dir("rapport")
+    Path("rapport/endpoints.json").write_text(text)
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
-        gpt_result = response.choices[0].message.content
-        ensure_dir("rapport")
-        with open("rapport/endpoints.json", "w") as f:
-            f.write(gpt_result)
-    except Exception as e:
-        print(f"[GPT Error] {e}")
+        return json.loads(text).get("endpoints", [])
+    except json.JSONDecodeError:
+        print("[!] Réponse Claude non-JSON, fichier brut sauvegardé dans rapport/endpoints.json")
+        return []
 
-def classify_endpoints_with_openai():
-    print("[+] Classification des endpoints avec OpenAI...")
-    with open("rapport/endpoints.json") as f:
-        endpoints = json.load(f)
 
-    prompt = f"""
-Tu es un expert en sécurité web. Classe les URLs suivantes dans les catégories suivantes : api_private, api_public, admin_like, assets, downloads, well_known, feeds, others, XSS, IDOR, SQLI. Retourne un JSON avec ces clés comme propriétés et des listes de liens comme valeurs.
+def classify_endpoints(client, endpoints):
+    print("[+] Classification des endpoints (Claude)...")
+    system = (
+        "Tu es un expert en sécurité web. Classe les URLs dans des catégories d'attaque. "
+        "Réponds uniquement avec un JSON valide."
+    )
+    user_prompt = f"""Classe les URLs suivantes dans ces catégories :
+api_private, api_public, admin_like, auth, upload, download, redirect,
+assets, well_known, xss_candidate, sqli_candidate, idor_candidate, ssrf_candidate, others.
 
-{json.dumps(endpoints[:100], indent=2)}
-"""
+Une URL peut apparaître dans plusieurs catégories si pertinent.
+
+URLs :
+{json.dumps(endpoints[:200], indent=2)}
+
+Retourne UNIQUEMENT un JSON {{ "<categorie>": ["url", ...], ... }}."""
+
+    response = client.messages.create(
+        model=DEFAULT_MODEL,
+        max_tokens=16_000,
+        system=system,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    Path("rapport/classified_endpoints.json").write_text(text)
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-        )
-        gpt_output = response.choices[0].message.content
-        ensure_dir("rapport")
-        with open("rapport/classified_endpoints.json", "w") as f:
-            f.write(gpt_output)
-        print("[+] Classification terminée dans rapport/classified_endpoints.json")
-    except Exception as e:
-        print(f"[GPT Error] {e}")
+        return json.loads(text)
+    except json.JSONDecodeError:
+        print("[!] Classification non-JSON, rapport/classified_endpoints.json contient la réponse brute.")
+        return {}
 
-def test_xss_payloads_adaptatif(base_url):
-    print(f"[TEST XSS] Analyse adaptative sur : {base_url}")
-    payloads = [
-        "<script>alert(1)</script>",
-        "\"'><svg/onload=alert(1)>",
-        "<img src=x onerror=alert(1)>"
-    ]
+
+def analyze_endpoints(client, categories, vuln_types):
+    print("[+] Analyse individuelle des endpoints prioritaires (Claude)...")
+    result = []
+    system = (
+        "Tu es un expert en sécurité web offensive. "
+        "Pour chaque endpoint, tu produis une analyse courte, structurée, actionnable."
+    )
+
+    for category, urls in categories.items():
+        for url in urls[:3]:
+            user_prompt = f"""Endpoint à analyser : {url}
+Catégorie déduite : {category}
+Types de failles visées : {', '.join(vuln_types)}
+
+Produis une analyse Markdown avec ces sections exactement :
+
+### Fonctionnalité probable
+1-2 phrases.
+
+### Failles plausibles (par ordre de probabilité)
+- Type — raison courte
+
+### Test manuel suggéré (1 seule requête curl)
+```
+curl ...
+```
+
+### Note bug bounty
+Score /10 et justification en 1 ligne."""
+
+            try:
+                response = client.messages.create(
+                    model=DEFAULT_MODEL,
+                    max_tokens=2_000,
+                    system=system,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                text = next((b.text for b in response.content if b.type == "text"), "")
+                result.append(f"## {url}\n\n_Catégorie : {category}_\n\n{text}\n")
+            except anthropic.APIError as exc:
+                result.append(f"## {url}\n\n_Erreur Claude : {exc}_\n")
+
+    ensure_dir("rapport")
+    Path("rapport/analyse_js.md").write_text("\n\n".join(result), encoding="utf-8")
+    print(f"[+] {len(result)} endpoints analysés dans rapport/analyse_js.md")
+
+
+def test_xss_reflected(base_url, verbose=False):
+    """Test XSS reflecté non-destructif : injecte un marqueur inoffensif."""
+    marker = "xssTEST1234"
     try:
         parsed = urlsplit(base_url)
         query = parse_qs(parsed.query)
         if not query:
-            print("[XSS] Aucun paramètre détecté dans l'URL, skip.")
             return False
         for param in query:
-            for payload in payloads:
-                new_query = query.copy()
-                new_query[param] = payload
-                encoded = urlencode(new_query, doseq=True)
-                new_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, encoded, parsed.fragment))
-                print(f"[XSS] Test URL: {new_url}")
-                resp = requests.get(new_url, headers=HEADERS, timeout=10)
-                if payload in resp.text:
-                    print(f"[!!] XSS détectée via paramètre '{param}' avec payload : {payload}")
-                    return True
-    except Exception as e:
-        print(f"[XSS Error] {e}")
+            new_query = {**query, param: marker}
+            encoded = urlencode(new_query, doseq=True)
+            test_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, encoded, parsed.fragment))
+            if verbose:
+                print(f"[XSS probe] {test_url}")
+            resp = requests.get(test_url, headers=HEADERS, timeout=10)
+            if marker in resp.text:
+                print(f"[!] Marqueur reflété via '{param}' sur {base_url} — candidat XSS à vérifier manuellement.")
+                return True
+    except requests.RequestException as exc:
+        print(f"[XSS probe error] {exc}")
     return False
 
-def analyze_js_files():
-    print("[+] Analyse des endpoints classés avec GPT...")
-    result = ""
-    with open("rapport/classified_endpoints.json") as f:
-        categories = json.load(f)
-    for category, urls in categories.items():
-        for url in urls[:2]:
-            prompt = f"""
-Tu es un expert en sécurité web. Voici un endpoint à analyser : {url}
-- Tente de deviner sa fonctionnalité (login, API privée, fichier sensible...)
-- Identifie les failles potentielles : {', '.join(VULN_TYPES)}
-- Suggère un vecteur d'attaque et un PoC simplifié
-- Donne une note de 1 à 10 sur le potentiel en bug bounty
-"""
-            try:
-                chat_response = openai_client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3,
-                )
-                gpt_output = chat_response.choices[0].message.content
-                result += f"\n\n# Analyse de {url}\n{gpt_output}\n"
-            except Exception as e:
-                result += f"\n\n# Erreur GPT sur {url} : {e}\n"
-    with open("rapport/analyse_js.md", "w", encoding="utf-8") as f:
-        f.write(result)
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Copilote Bug Bounty — pipeline Claude")
+    parser.add_argument("--target", required=True, help="Domaine cible (doit être dans scope.txt)")
+    parser.add_argument("--vulns", default="xss,sqli,idor,ssrf,jwt",
+                        help="Types de failles à viser (virgule)")
+    parser.add_argument("--claude", action="store_true",
+                        help="Activer l'analyse Claude (nécessite ANTHROPIC_API_KEY)")
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                        help=f"Modèle Claude à utiliser (défaut : {DEFAULT_MODEL})")
+    parser.add_argument("--serve", action="store_true",
+                        help="Lancer le viewer Flask à la fin sur http://localhost:5000")
+    parser.add_argument("--skip-scope-check", action="store_true",
+                        help="Ne pas vérifier scope.txt (à utiliser en CTF/lab uniquement)")
+    parser.add_argument("--verbose", action="store_true")
+    return parser.parse_args()
+
 
 def main():
-    ensure_dir("js")
-    reconnaissance(TARGET_DOMAIN)
-    if args.openai:
-        classify_endpoints_with_openai()
-        analyze_js_files()
-        print("[+] Rapport généré : rapport/analyse_js.md")
-        print("[+] Lancement de l'interface web sur http://localhost:5000")
-    app.run(debug=False)
+    args = parse_args()
+    global DEFAULT_MODEL
+    DEFAULT_MODEL = args.model
+
+    if not args.skip_scope_check and not check_scope(args.target):
+        return 1
+
+    vuln_types = [v.strip() for v in args.vulns.split(",") if v.strip()]
+    recon_text = reconnaissance(args.target, args.verbose)
+
+    if args.claude:
+        client = claude_client()
+        endpoints = extract_endpoints(client, args.target, recon_text, vuln_types)
+        if endpoints:
+            categories = classify_endpoints(client, endpoints)
+            if categories:
+                analyze_endpoints(client, categories, vuln_types)
+
+    if args.serve:
+        print("[+] Viewer : http://localhost:5000")
+        app.run(host="127.0.0.1", port=5000, debug=False)
+
+    return 0
+
 
 if __name__ == "__main__":
-    main()
-
+    raise SystemExit(main())

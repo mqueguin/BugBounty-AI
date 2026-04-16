@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(subfinder:*)",
+      "Bash(assetfinder:*)",
+      "Bash(amass:*)",
+      "Bash(httpx:*)",
+      "Bash(httpx-toolkit:*)",
+      "Bash(gau:*)",
+      "Bash(waybackurls:*)",
+      "Bash(paramspider:*)",
+      "Bash(katana:*)",
+      "Bash(gf:*)",
+      "Bash(dalfox:*)",
+      "Bash(nuclei -t *)",
+      "Bash(nuclei -u *)",
+      "Bash(nuclei -l *)",
+      "Bash(jq:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(dig:*)",
+      "Bash(whois:*)",
+      "Bash(host:*)",
+      "Bash(nslookup:*)",
+      "Bash(python3 IABounty.py:*)",
+      "Bash(pip install -r requirements.txt)",
+      "Bash(mkdir:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(wc:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Read(./**)",
+      "Write(./recon/**)",
+      "Write(./rapport/**)",
+      "Write(./findings/**)",
+      "Write(./js/**)"
+    ],
+    "ask": [
+      "Bash(sqlmap:*)",
+      "Bash(ffuf:*)",
+      "Bash(nuclei:*)",
+      "Bash(hydra:*)",
+      "Bash(wfuzz:*)",
+      "Bash(nmap:*)",
+      "Bash(masscan:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(:(){ :|:& };:)",
+      "Read(./.env)",
+      "Read(./**/*.key)",
+      "Read(./**/*.pem)",
+      "Read(./**/id_rsa*)"
+    ]
+  },
+  "env": {
+    "ANTHROPIC_MODEL": "claude-sonnet-4-6"
+  }
+}

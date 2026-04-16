@@ -1,85 +1,137 @@
-# 🤖 Bug Bounty Copilot AI
+# BugBounty-AI — Copilote Bug Bounty piloté par Claude Code
 
-Un agent IA semi-autonome pour le bug bounty qui t’assiste de A à Z : reconnaissance, tri intelligent des endpoints, analyse automatique avec GPT, génération de PoC et interface web pour visualiser les résultats.
+Workspace dédié au bug bounty, utilisable :
 
-> ✨ Conçu pour que tu passes moins de temps à scroller les endpoints et plus de temps à **trouver des failles exploitables.**
+- **depuis Claude Code** (CLI Anthropic) grâce au dossier `.claude/` (subagents, slash commands, skills)
+- **en ligne de commande** via `IABounty.py`, un pipeline recon + analyse Claude (Anthropic SDK)
 
----
-
-## 🚀 Fonctionnalités
-
-- 🔍 **Reconnaissance étendue** (subdomains, historical URLs, paramètres, etc.)
-- 🧠 **Classification automatique** des endpoints via GPT (admin, APIs, assets…)
-- 🛠️ **Analyse automatique** des endpoints ou fichiers JS avec PoC potentiels
-- 📊 **Interface web** locale avec rapport Markdown généré automatiquement
-- 🧪 **Tests actifs** (bientôt : XSS, IDOR, SQLi…)
-- 🧵 **Options CLI** (threads, types de failles ciblées, verbose…)
+Objectif : réduire le temps passé à scroller des endpoints, maximiser le temps passé à trouver des failles exploitables.
 
 ---
 
-## ⚙️ Installation
+## Deux façons de l'utiliser
 
-### 1. Clone le projet
+### 1. Claude Code (recommandé)
 
-```bash
-git clone https://github.com/tonpseudo/bugbounty-copilot-ai.git
-cd bugbounty-copilot-ai
+Ouvre le dossier dans [Claude Code](https://claude.com/claude-code) — tout le workflow est à portée de slash command.
+
+```
+cd BugBounty-AI
+claude
 ```
 
-2. Installe les dépendances Python
+Puis dans la session :
+
+```
+/scope-add example.com
+/recon example.com
+/hunt xss https://example.com/search?q=test
+/poc <finding-slug>
+/report <finding-slug>
+/triage
+```
+
+Claude Code charge automatiquement :
+- `CLAUDE.md` — règles du workspace, arborescence, workflow
+- `.claude/agents/` — subagents spécialisés (`recon-specialist`, `vuln-hunter`, `report-writer`, `js-analyzer`)
+- `.claude/commands/` — slash commands
+- `.claude/skills/` — méthodologie par type de faille (XSS, SQLi, IDOR, SSRF, JWT)
+- `.claude/settings.json` — permissions pré-configurées pour les outils recon classiques
+
+### 2. Pipeline Python standalone
+
 ```bash
 pip install -r requirements.txt
-```
-3. Assure-toi d’avoir les outils CLI installés
+export ANTHROPIC_API_KEY=sk-ant-...
+echo "example.com" > scope.txt
 
-    subfinder
-
-    httpx
-
-    gau
-
-    waybackurls
-
-    paramspider
-
-    Tu peux les installer facilement avec go install ou apt install.
-
-4. Configure ta clé OpenAI
-```bash
-export OPENAI_API_KEY=ta-cle-api-openai
-```
-🧠 Utilisation
-Lancer une analyse complète sur un domaine
-```bash
-python3 main.py --target example.com
+python3 IABounty.py --target example.com --claude --serve
 ```
 
-Mode verbose (affiche les commandes en cours)
-```bash
-python3 main.py --target example.com --verbose
+Options :
+
+| Flag | Effet |
+|------|-------|
+| `--target <domain>` | Domaine cible (doit être dans `scope.txt`) |
+| `--claude` | Active l'analyse Claude (extraction, classification, analyse endpoint-par-endpoint) |
+| `--model <id>` | Modèle Claude (défaut : `claude-opus-4-7`, override via `ANTHROPIC_MODEL` env) |
+| `--vulns` | Types de failles ciblés (défaut : `xss,sqli,idor,ssrf,jwt`) |
+| `--serve` | Lance le viewer Flask sur http://localhost:5000 |
+| `--verbose` | Affiche chaque commande système |
+| `--skip-scope-check` | **Dangereux.** À réserver aux labs/CTF. |
+
+---
+
+## Prérequis outils CLI
+
+Mets ces outils dans ton PATH (via `go install` ou package manager) :
+
+- **Recon passive** : `subfinder`, `gau`, `waybackurls`
+- **Probing** : `httpx`
+- **Params** : `paramspider`
+- **Crawling** : `katana`
+- **Optionnels actifs** (demandent confirmation dans Claude Code) : `nuclei`, `ffuf`, `sqlmap`, `dalfox`
+
+---
+
+## Arborescence
+
 ```
-Spécifier les failles ciblées
-```bash
-python3 main.py --target example.com --vulns xss,sqli,idor
+BugBounty-AI/
+├── CLAUDE.md                       # Guide pour Claude Code
+├── IABounty.py                     # Pipeline Python (recon + Claude)
+├── requirements.txt
+├── scope.txt                       # Domaines autorisés (à créer)
+├── recon/                          # Outputs outils recon
+├── rapport/                        # endpoints.json, classified_endpoints.json, analyse_js.md
+├── findings/                       # Un .md par vulnérabilité confirmée
+└── .claude/
+    ├── settings.json               # Permissions & env
+    ├── agents/                     # Subagents
+    │   ├── recon-specialist.md
+    │   ├── vuln-hunter.md
+    │   ├── report-writer.md
+    │   └── js-analyzer.md
+    ├── commands/                   # Slash commands
+    │   ├── recon.md
+    │   ├── hunt.md
+    │   ├── analyze.md
+    │   ├── poc.md
+    │   ├── report.md
+    │   ├── triage.md
+    │   └── scope-add.md
+    └── skills/                     # Méthodologies par type de faille
+        ├── xss-hunting.md
+        ├── sqli-techniques.md
+        ├── idor-testing.md
+        ├── ssrf-bypasses.md
+        └── jwt-attacks.md
 ```
-📁 Structure du projet
 
-├── js/                        # JS téléchargés automatiquement
-├── recon/                     # Fichiers de reconnaissance
-├── rapport/
-│   ├── endpoints.json         # Tous les endpoints bruts
-│   ├── classified_endpoints.json  # Classés par catégories via GPT
-│   └── analyse_js.md          # Rapport final généré
-├── main.py                    # Fichier principal
+---
 
-🛠️ Roadmap à venir
+## Règles éthiques (non-négociables)
 
-Tests actifs XSS/IDOR/SQLi par catégorie
+Le workspace n'opère **que** sur des domaines présents dans `scope.txt`. Claude (et ses subagents) sont configurés pour :
 
-Génération de rapports Markdown prêts à soumettre
+- Refuser tout test en dehors du scope
+- Éviter les actions destructives (DROP, DELETE, brute-force massif, DoS)
+- Respecter les rate-limits
+- Ne jamais commiter de credentials, cookies de session, ou données réelles de tiers
+- Redacter PII / tokens dans les rapports
 
-Mode “Autopilot full scan”
+---
 
-Intégration LinkFinder pour enrichir les analyses JS
+## Ajouter une nouvelle méthodologie
 
-Intégration à Discord / Slack
+Crée un fichier dans `.claude/skills/<vuln>-<action>.md` en suivant la structure des skills existantes (identification → payloads → bypass → impact → PoC → éthique), puis ajoute le mapping dans `.claude/commands/hunt.md` si tu veux l'exposer via `/hunt <category>`.
+
+---
+
+## Roadmap
+
+- [ ] Intégration `nuclei` templates custom par catégorie
+- [ ] Subagent `graphql-hunter` dédié
+- [ ] Export auto H1/Bugcrowd via leurs APIs (opt-in)
+- [ ] Skills XXE, SSTI, RCE, LFI
+- [ ] Hook post-recon qui relance automatiquement `vuln-hunter` sur le top 5
